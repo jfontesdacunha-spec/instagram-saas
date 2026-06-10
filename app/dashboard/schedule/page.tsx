@@ -1,6 +1,6 @@
 "use client"
-import { useState } from "react"
-import { Calendar, Clock, Trash2, Plus, Film, Image } from "lucide-react"
+import { useState, useRef } from "react"
+import { Calendar, Clock, Trash2, Plus, Film, Image, X } from "lucide-react"
 
 type ScheduledPost = {
   id: string
@@ -20,12 +20,40 @@ export default function SchedulePage() {
   const [time, setTime] = useState("")
   const [caption, setCaption] = useState("")
   const [hashtags, setHashtags] = useState("")
-  const [fileName, setFileName] = useState("")
-  const [coverName, setCoverName] = useState("")
+  const [videoFile, setVideoFile] = useState<File | null>(null)
+  const [coverFile, setCoverFile] = useState<File | null>(null)
+  const [coverPreview, setCoverPreview] = useState<string | null>(null)
+  const [imageFile, setImageFile] = useState<File | null>(null)
   const [fileType, setFileType] = useState<"video" | "image">("video")
+  const videoRef = useRef<HTMLInputElement>(null)
+  const coverRef = useRef<HTMLInputElement>(null)
+  const imageRef = useRef<HTMLInputElement>(null)
+
+  const formatSize = (bytes: number) => {
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+  }
+
+  const handleCoverChange = (file: File | null) => {
+    setCoverFile(file)
+    if (file) {
+      setCoverPreview(URL.createObjectURL(file))
+    } else {
+      setCoverPreview(null)
+    }
+  }
+
+  const switchType = (type: "video" | "image") => {
+    setFileType(type)
+    setVideoFile(null)
+    setCoverFile(null)
+    setCoverPreview(null)
+    setImageFile(null)
+  }
 
   const addPost = () => {
-    if (!date || !time || !fileName) return alert("Preencha data, hora e selecione um arquivo")
+    const file = fileType === "video" ? videoFile : imageFile
+    if (!date || !time || !file) return alert("Preencha data, hora e selecione um arquivo")
     const newPost: ScheduledPost = {
       id: Math.random().toString(36).slice(2),
       date,
@@ -33,8 +61,8 @@ export default function SchedulePage() {
       caption,
       hashtags,
       type: fileType,
-      fileName,
-      coverName: fileType === "video" && coverName ? coverName : undefined,
+      fileName: file.name,
+      coverName: coverFile?.name,
     }
     setPosts(prev => [...prev, newPost].sort((a, b) => `${a.date}${a.time}`.localeCompare(`${b.date}${b.time}`)))
     setShowForm(false)
@@ -42,8 +70,10 @@ export default function SchedulePage() {
     setTime("")
     setCaption("")
     setHashtags("")
-    setFileName("")
-    setCoverName("")
+    setVideoFile(null)
+    setCoverFile(null)
+    setCoverPreview(null)
+    setImageFile(null)
   }
 
   const removePost = (id: string) => {
@@ -90,30 +120,80 @@ export default function SchedulePage() {
           <div>
             <label className="text-xs text-gray-400 mb-1.5 block">Tipo de conteúdo</label>
             <div className="flex gap-2">
-              <button onClick={() => { setFileType("video"); setCoverName("") }}
+              <button onClick={() => switchType("video")}
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm transition-colors ${fileType === "video" ? "bg-purple-500/20 border border-purple-500/40 text-purple-300" : "bg-white/5 border border-white/10 text-gray-400 hover:text-white"}`}>
                 <Film size={14} /> Vídeo (Reel)
               </button>
-              <button onClick={() => { setFileType("image"); setCoverName("") }}
+              <button onClick={() => switchType("image")}
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm transition-colors ${fileType === "image" ? "bg-pink-500/20 border border-pink-500/40 text-pink-300" : "bg-white/5 border border-white/10 text-gray-400 hover:text-white"}`}>
                 <Image size={14} /> Imagem
               </button>
             </div>
           </div>
 
-          <div>
-            <label className="text-xs text-gray-400 mb-1.5 block">Nome do arquivo</label>
-            <input type="text" value={fileName} onChange={e => setFileName(e.target.value)}
-              placeholder={fileType === "video" ? "ex: meu-video.mp4" : "ex: minha-foto.jpg"}
-              className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-purple-500" />
-          </div>
-
           {fileType === "video" && (
+            <>
+              <div>
+                <label className="text-xs text-gray-400 mb-1.5 block">Vídeo (Reel)</label>
+                <input ref={videoRef} type="file" accept="video/*" className="hidden"
+                  onChange={e => setVideoFile(e.target.files?.[0] || null)} />
+                {videoFile ? (
+                  <div className="flex items-center gap-3 bg-white/5 border border-white/10 rounded-lg px-3 py-2.5">
+                    <Film size={15} className="text-purple-400" />
+                    <span className="text-sm text-white flex-1 truncate">{videoFile.name}</span>
+                    <span className="text-xs text-gray-500">{formatSize(videoFile.size)}</span>
+                    <button onClick={() => setVideoFile(null)}><X size={14} className="text-gray-500 hover:text-white" /></button>
+                  </div>
+                ) : (
+                  <button onClick={() => videoRef.current?.click()}
+                    className="w-full flex items-center justify-center gap-2 bg-white/5 border border-dashed border-white/10 rounded-lg px-3 py-4 text-sm text-gray-500 hover:text-white hover:border-purple-500/50 transition-colors">
+                    <Film size={15} />
+                    Clique para selecionar vídeo
+                  </button>
+                )}
+              </div>
+
+              <div>
+                <label className="text-xs text-gray-400 mb-1.5 block">Capa do Reel <span className="text-gray-600">(opcional)</span></label>
+                <input ref={coverRef} type="file" accept="image/*" className="hidden"
+                  onChange={e => handleCoverChange(e.target.files?.[0] || null)} />
+                {coverFile && coverPreview ? (
+                  <div className="flex items-center gap-3 bg-white/5 border border-white/10 rounded-lg px-3 py-2.5">
+                    <img src={coverPreview} alt="capa" className="w-10 h-10 rounded object-cover" />
+                    <span className="text-sm text-white flex-1 truncate">{coverFile.name}</span>
+                    <span className="text-xs text-gray-500">{formatSize(coverFile.size)}</span>
+                    <button onClick={() => handleCoverChange(null)}><X size={14} className="text-gray-500 hover:text-white" /></button>
+                  </div>
+                ) : (
+                  <button onClick={() => coverRef.current?.click()}
+                    className="w-full flex items-center justify-center gap-2 bg-white/5 border border-dashed border-yellow-500/20 rounded-lg px-3 py-4 text-sm text-gray-500 hover:text-white hover:border-yellow-500/50 transition-colors">
+                    <Image size={15} />
+                    Clique para adicionar capa do Reel
+                  </button>
+                )}
+              </div>
+            </>
+          )}
+
+          {fileType === "image" && (
             <div>
-              <label className="text-xs text-gray-400 mb-1.5 block">Capa do Reel <span className="text-gray-600">(opcional)</span></label>
-              <input type="text" value={coverName} onChange={e => setCoverName(e.target.value)}
-                placeholder="ex: capa.jpg"
-                className="w-full bg-white/5 border border-yellow-500/20 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-yellow-500" />
+              <label className="text-xs text-gray-400 mb-1.5 block">Imagem</label>
+              <input ref={imageRef} type="file" accept="image/*" className="hidden"
+                onChange={e => setImageFile(e.target.files?.[0] || null)} />
+              {imageFile ? (
+                <div className="flex items-center gap-3 bg-white/5 border border-white/10 rounded-lg px-3 py-2.5">
+                  <Image size={15} className="text-pink-400" />
+                  <span className="text-sm text-white flex-1 truncate">{imageFile.name}</span>
+                  <span className="text-xs text-gray-500">{formatSize(imageFile.size)}</span>
+                  <button onClick={() => setImageFile(null)}><X size={14} className="text-gray-500 hover:text-white" /></button>
+                </div>
+              ) : (
+                <button onClick={() => imageRef.current?.click()}
+                  className="w-full flex items-center justify-center gap-2 bg-white/5 border border-dashed border-white/10 rounded-lg px-3 py-4 text-sm text-gray-500 hover:text-white hover:border-pink-500/50 transition-colors">
+                  <Image size={15} />
+                  Clique para selecionar imagem
+                </button>
+              )}
             </div>
           )}
 
@@ -150,7 +230,7 @@ export default function SchedulePage() {
             <Calendar size={24} className="text-purple-400" />
           </div>
           <h3 className="font-semibold text-white mb-2">Nenhum post agendado</h3>
-          <p className="text-gray-500 text-sm mb-6 max-w-xs mx-auto">Clique em "Novo agendamento" para agendar seu primeiro post</p>
+          <p className="text-gray-500 text-sm max-w-xs mx-auto">Clique em "Novo agendamento" para agendar seu primeiro post</p>
         </div>
       ) : (
         <div className="space-y-3">
@@ -161,9 +241,7 @@ export default function SchedulePage() {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm text-white font-medium truncate">{post.fileName}</p>
-                {post.coverName && (
-                  <p className="text-xs text-yellow-500/70 truncate mt-0.5">Capa: {post.coverName}</p>
-                )}
+                {post.coverName && <p className="text-xs text-yellow-500/70 truncate mt-0.5">Capa: {post.coverName}</p>}
                 {post.caption && <p className="text-xs text-gray-500 truncate mt-0.5">{post.caption}</p>}
               </div>
               <div className="flex items-center gap-4 flex-shrink-0">
