@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-"build": "prisma generate && prisma db push && next build",
+    "build": "prisma generate && prisma db push && next build",
     "start": "next start",
     "lint": "next lint"
   },
@@ -24,10 +24,9 @@
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-dom": "^18",
-    "typescript": "^5"
+    "typescript": "^5",
+    "autoprefixer": "^10.4.19",
+    "postcss": "^8.4.38",
+    "tailwindcss": "^3.4.4"
   }
 }
-
-
-
-so altera o codigo ai q eu copio e colo la
