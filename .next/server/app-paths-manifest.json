@@ -1,0 +1,6 @@
+{
+  "/api/auth/[...nextauth]/route": "app/api/auth/[...nextauth]/route.js",
+  "/api/instagram/accounts/route": "app/api/instagram/accounts/route.js",
+  "/dashboard/accounts/page": "app/dashboard/accounts/page.js",
+  "/dashboard/page": "app/dashboard/page.js"
+}
