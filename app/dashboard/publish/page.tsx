@@ -1,16 +1,18 @@
 "use client"
-import { useEffect, useState } from "react"
-import { Upload, Instagram, CheckCircle, XCircle, Loader2 } from "lucide-react"
+import { useEffect, useState, useRef } from "react"
+import { Upload, Instagram, CheckCircle, XCircle, Loader2, Film, Image, X } from "lucide-react"
 
 export default function PublishPage() {
   const [accounts, setAccounts] = useState<any[]>([])
   const [selectedAccounts, setSelectedAccounts] = useState<string[]>([])
-  const [videoUrl, setVideoUrl] = useState("")
-  const [imageUrl, setImageUrl] = useState("")
+  const [videoFile, setVideoFile] = useState<File | null>(null)
+  const [imageFile, setImageFile] = useState<File | null>(null)
   const [caption, setCaption] = useState("")
   const [hashtags, setHashtags] = useState("")
   const [publishing, setPublishing] = useState(false)
   const [results, setResults] = useState<any[]>([])
+  const videoRef = useRef<HTMLInputElement>(null)
+  const imageRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     fetch("/api/instagram/accounts").then(r => r.json()).then(data => {
@@ -25,21 +27,30 @@ export default function PublishPage() {
     )
   }
 
-  const selectAll = () => {
-    setSelectedAccounts(accounts.map(a => a.id))
+  const selectAll = () => setSelectedAccounts(accounts.map(a => a.id))
+
+  const formatSize = (bytes: number) => {
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
   }
 
   const publish = async () => {
-    if (!videoUrl && !imageUrl) return alert("Adicione uma URL de vídeo ou imagem")
+    if (!videoFile && !imageFile) return alert("Adicione um vídeo ou imagem")
     if (selectedAccounts.length === 0) return alert("Selecione pelo menos uma conta")
 
     setPublishing(true)
     setResults([])
 
+    const formData = new FormData()
+    if (videoFile) formData.append("video", videoFile)
+    if (imageFile) formData.append("image", imageFile)
+    formData.append("caption", caption)
+    formData.append("hashtags", hashtags)
+    formData.append("accountIds", JSON.stringify(selectedAccounts))
+
     const res = await fetch("/api/posts/publish", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ videoUrl, imageUrl, caption, hashtags, accountIds: selectedAccounts }),
+      body: formData,
     })
 
     const data = await res.json()
@@ -55,72 +66,79 @@ export default function PublishPage() {
       </div>
 
       <div className="grid grid-cols-5 gap-6">
-        {/* Form */}
         <div className="col-span-3 space-y-4">
           <div className="bg-[#111] border border-white/5 rounded-xl p-6 space-y-4">
             <h2 className="font-semibold text-white text-sm">Conteúdo</h2>
 
+            {/* Video upload */}
             <div>
-              <label className="text-xs text-gray-400 mb-1.5 block">URL do vídeo (Reel)</label>
-              <input
-                value={videoUrl}
-                onChange={e => setVideoUrl(e.target.value)}
-                placeholder="https://..."
-                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-purple-500"
-              />
+              <label className="text-xs text-gray-400 mb-1.5 block">Vídeo (Reel) — máx. 4MB</label>
+              <input ref={videoRef} type="file" accept="video/*" className="hidden"
+                onChange={e => setVideoFile(e.target.files?.[0] || null)} />
+              {videoFile ? (
+                <div className="flex items-center gap-3 bg-white/5 border border-white/10 rounded-lg px-3 py-2.5">
+                  <Film size={15} className="text-purple-400" />
+                  <span className="text-sm text-white flex-1 truncate">{videoFile.name}</span>
+                  <span className="text-xs text-gray-500">{formatSize(videoFile.size)}</span>
+                  <button onClick={() => setVideoFile(null)}><X size={14} className="text-gray-500 hover:text-white" /></button>
+                </div>
+              ) : (
+                <button onClick={() => videoRef.current?.click()}
+                  className="w-full flex items-center justify-center gap-2 bg-white/5 border border-dashed border-white/10 rounded-lg px-3 py-4 text-sm text-gray-500 hover:text-white hover:border-purple-500/50 transition-colors">
+                  <Film size={15} />
+                  Clique para selecionar vídeo
+                </button>
+              )}
             </div>
 
+            {/* Image upload */}
             <div>
-              <label className="text-xs text-gray-400 mb-1.5 block">URL da imagem (opcional)</label>
-              <input
-                value={imageUrl}
-                onChange={e => setImageUrl(e.target.value)}
-                placeholder="https://..."
-                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-purple-500"
-              />
+              <label className="text-xs text-gray-400 mb-1.5 block">Imagem (opcional) — máx. 4MB</label>
+              <input ref={imageRef} type="file" accept="image/*" className="hidden"
+                onChange={e => setImageFile(e.target.files?.[0] || null)} />
+              {imageFile ? (
+                <div className="flex items-center gap-3 bg-white/5 border border-white/10 rounded-lg px-3 py-2.5">
+                  <Image size={15} className="text-pink-400" />
+                  <span className="text-sm text-white flex-1 truncate">{imageFile.name}</span>
+                  <span className="text-xs text-gray-500">{formatSize(imageFile.size)}</span>
+                  <button onClick={() => setImageFile(null)}><X size={14} className="text-gray-500 hover:text-white" /></button>
+                </div>
+              ) : (
+                <button onClick={() => imageRef.current?.click()}
+                  className="w-full flex items-center justify-center gap-2 bg-white/5 border border-dashed border-white/10 rounded-lg px-3 py-4 text-sm text-gray-500 hover:text-white hover:border-pink-500/50 transition-colors">
+                  <Image size={15} />
+                  Clique para selecionar imagem
+                </button>
+              )}
             </div>
 
             <div>
               <label className="text-xs text-gray-400 mb-1.5 block">Legenda</label>
-              <textarea
-                value={caption}
-                onChange={e => setCaption(e.target.value)}
-                placeholder="Escreva a legenda do post..."
-                rows={4}
-                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-purple-500 resize-none"
-              />
+              <textarea value={caption} onChange={e => setCaption(e.target.value)}
+                placeholder="Escreva a legenda do post..." rows={4}
+                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-purple-500 resize-none" />
             </div>
 
             <div>
               <label className="text-xs text-gray-400 mb-1.5 block">Hashtags</label>
-              <input
-                value={hashtags}
-                onChange={e => setHashtags(e.target.value)}
+              <input value={hashtags} onChange={e => setHashtags(e.target.value)}
                 placeholder="#hashtag1 #hashtag2"
-                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-purple-500"
-              />
+                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-purple-500" />
             </div>
           </div>
 
-          <button
-            onClick={publish}
-            disabled={publishing}
-            className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:opacity-90 disabled:opacity-50 text-white font-medium py-3 rounded-xl transition-opacity"
-          >
+          <button onClick={publish} disabled={publishing}
+            className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:opacity-90 disabled:opacity-50 text-white font-medium py-3 rounded-xl transition-opacity">
             {publishing ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
             {publishing ? "Publicando..." : `Publicar em ${selectedAccounts.length} conta(s)`}
           </button>
 
-          {/* Results */}
           {results.length > 0 && (
             <div className="bg-[#111] border border-white/5 rounded-xl p-5 space-y-3">
               <h3 className="font-semibold text-white text-sm">Resultado</h3>
               {results.map((r, i) => (
                 <div key={i} className="flex items-center gap-3">
-                  {r.status === "success"
-                    ? <CheckCircle size={15} className="text-green-400" />
-                    : <XCircle size={15} className="text-red-400" />
-                  }
+                  {r.status === "success" ? <CheckCircle size={15} className="text-green-400" /> : <XCircle size={15} className="text-red-400" />}
                   <span className="text-sm text-gray-300">@{r.username}</span>
                   <span className={`text-xs ml-auto ${r.status === "success" ? "text-green-400" : "text-red-400"}`}>
                     {r.status === "success" ? "Publicado" : r.error || "Erro"}
@@ -131,32 +149,23 @@ export default function PublishPage() {
           )}
         </div>
 
-        {/* Accounts selector */}
         <div className="col-span-2">
           <div className="bg-[#111] border border-white/5 rounded-xl p-5">
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-semibold text-white text-sm">Contas</h2>
-              <button onClick={selectAll} className="text-xs text-purple-400 hover:text-purple-300">
-                Todas
-              </button>
+              <button onClick={selectAll} className="text-xs text-purple-400 hover:text-purple-300">Todas</button>
             </div>
-
             {accounts.length === 0 ? (
-              <p className="text-gray-500 text-xs text-center py-6">
-                Nenhuma conta conectada
-              </p>
+              <p className="text-gray-500 text-xs text-center py-6">Nenhuma conta conectada</p>
             ) : (
               <div className="space-y-2">
                 {accounts.map((account) => (
-                  <button
-                    key={account.id}
-                    onClick={() => toggleAccount(account.id)}
+                  <button key={account.id} onClick={() => toggleAccount(account.id)}
                     className={`w-full flex items-center gap-3 p-3 rounded-lg transition-colors ${
                       selectedAccounts.includes(account.id)
                         ? "bg-purple-500/10 border border-purple-500/30"
                         : "bg-white/3 border border-white/5 hover:bg-white/5"
-                    }`}
-                  >
+                    }`}>
                     {account.profilePicture ? (
                       <img src={account.profilePicture} alt="" className="w-8 h-8 rounded-full" />
                     ) : (
@@ -165,9 +174,7 @@ export default function PublishPage() {
                       </div>
                     )}
                     <span className="text-sm text-white">@{account.username}</span>
-                    {selectedAccounts.includes(account.id) && (
-                      <CheckCircle size={14} className="text-purple-400 ml-auto" />
-                    )}
+                    {selectedAccounts.includes(account.id) && <CheckCircle size={14} className="text-purple-400 ml-auto" />}
                   </button>
                 ))}
               </div>
