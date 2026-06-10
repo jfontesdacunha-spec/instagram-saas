@@ -1,187 +1,164 @@
-"use client"
-import { useEffect, useState, useRef } from "react"
-import { Upload, Instagram, CheckCircle, XCircle, Loader2, Film, Image, X } from "lucide-react"
+import { prisma } from "@/lib/prisma"
+import { NextResponse } from "next/server"
+import { getServerSession } from "next-auth"
 
-export default function PublishPage() {
-  const [accounts, setAccounts] = useState<any[]>([])
-  const [selectedAccounts, setSelectedAccounts] = useState<string[]>([])
-  const [videoFile, setVideoFile] = useState<File | null>(null)
-  const [imageFile, setImageFile] = useState<File | null>(null)
-  const [caption, setCaption] = useState("")
-  const [hashtags, setHashtags] = useState("")
-  const [publishing, setPublishing] = useState(false)
-  const [results, setResults] = useState<any[]>([])
-  const videoRef = useRef<HTMLInputElement>(null)
-  const imageRef = useRef<HTMLInputElement>(null)
+async function uploadToCloudinary(buffer: Buffer, resourceType: "video" | "image", filename: string): Promise<string> {
+  const cloudName = process.env.CLOUDINARY_CLOUD_NAME!
+  const apiKey = process.env.CLOUDINARY_API_KEY!
+  const apiSecret = process.env.CLOUDINARY_API_SECRET!
 
-  useEffect(() => {
-    fetch("/api/instagram/accounts").then(r => r.json()).then(data => {
-      setAccounts(data)
-      setSelectedAccounts(data.map((a: any) => a.id))
-    })
-  }, [])
+  const timestamp = Math.floor(Date.now() / 1000)
+  const signature_string = `timestamp=${timestamp}${apiSecret}`
 
-  const toggleAccount = (id: string) => {
-    setSelectedAccounts(prev =>
-      prev.includes(id) ? prev.filter(a => a !== id) : [...prev, id]
-    )
+  const encoder = new TextEncoder()
+  const data = encoder.encode(signature_string)
+  const hashBuffer = await crypto.subtle.digest("SHA-1", data)
+  const hashArray = Array.from(new Uint8Array(hashBuffer))
+  const signature = hashArray.map(b => b.toString(16).padStart(2, "0")).join("")
+
+  const formData = new FormData()
+  const blob = new Blob([buffer], { type: resourceType === "video" ? "video/mp4" : "image/jpeg" })
+  formData.append("file", blob, filename)
+  formData.append("api_key", apiKey)
+  formData.append("timestamp", timestamp.toString())
+  formData.append("signature", signature)
+
+  const res = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/${resourceType}/upload`, {
+    method: "POST",
+    body: formData,
+  })
+
+  const data2 = await res.json()
+  if (!data2.secure_url) throw new Error(`Cloudinary upload failed: ${JSON.stringify(data2)}`)
+  return data2.secure_url
+}
+
+export async function POST(request: Request) {
+  const session = await getServerSession()
+  if (!session?.user?.email) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
-  const selectAll = () => setSelectedAccounts(accounts.map(a => a.id))
+  const formData = await request.formData()
+  const videoFile = formData.get("video") as File | null
+  const imageFile = formData.get("image") as File | null
+  const caption = formData.get("caption") as string || ""
+  const hashtags = formData.get("hashtags") as string || ""
+  const accountIds = JSON.parse(formData.get("accountIds") as string || "[]")
 
-  const formatSize = (bytes: number) => {
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+  const user = await prisma.user.findUnique({ where: { email: session.user.email } })
+  if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 })
+
+  // Upload para Cloudinary
+  let videoUrl = ""
+  let imageUrl = ""
+
+  if (videoFile) {
+    const buffer = Buffer.from(await videoFile.arrayBuffer())
+    videoUrl = await uploadToCloudinary(buffer, "video", videoFile.name)
+  }
+  if (imageFile) {
+    const buffer = Buffer.from(await imageFile.arrayBuffer())
+    imageUrl = await uploadToCloudinary(buffer, "image", imageFile.name)
   }
 
-  const publish = async () => {
-    if (!videoFile && !imageFile) return alert("Adicione um vídeo ou imagem")
-    if (selectedAccounts.length === 0) return alert("Selecione pelo menos uma conta")
+  const post = await prisma.post.create({
+    data: {
+      userId: user.id,
+      videoUrl,
+      imageUrl,
+      caption,
+      hashtags,
+      status: "publishing",
+    },
+  })
 
-    setPublishing(true)
-    setResults([])
+  const accounts = await prisma.instagramAccount.findMany({
+    where: { id: { in: accountIds }, userId: user.id, isActive: true },
+  })
 
-    const formData = new FormData()
-    if (videoFile) formData.append("video", videoFile)
-    if (imageFile) formData.append("image", imageFile)
-    formData.append("caption", caption)
-    formData.append("hashtags", hashtags)
-    formData.append("accountIds", JSON.stringify(selectedAccounts))
+  const results = []
+  for (const account of accounts) {
+    try {
+      const fullCaption = `${caption} ${hashtags}`.trim()
+      let containerId = ""
 
-    const res = await fetch("/api/posts/publish", {
-      method: "POST",
-      body: formData,
-    })
+      if (videoUrl) {
+        const containerRes = await fetch(
+          `https://graph.instagram.com/v19.0/${account.igUserId}/media`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              media_type: "REELS",
+              video_url: videoUrl,
+              caption: fullCaption,
+              access_token: account.accessToken,
+            }),
+          }
+        )
+        const containerData = await containerRes.json()
+        containerId = containerData.id
+      } else if (imageUrl) {
+        const containerRes = await fetch(
+          `https://graph.instagram.com/v19.0/${account.igUserId}/media`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              image_url: imageUrl,
+              caption: fullCaption,
+              access_token: account.accessToken,
+            }),
+          }
+        )
+        const containerData = await containerRes.json()
+        containerId = containerData.id
+      }
 
-    const data = await res.json()
-    setResults(data.results || [])
-    setPublishing(false)
+      if (!containerId) throw new Error("Failed to create media container")
+
+      await new Promise((r) => setTimeout(r, 5000))
+
+      const publishRes = await fetch(
+        `https://graph.instagram.com/v19.0/${account.igUserId}/media_publish`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            creation_id: containerId,
+            access_token: account.accessToken,
+          }),
+        }
+      )
+      const publishData = await publishRes.json()
+
+      if (publishData.id) {
+        await prisma.postLog.create({
+          data: { postId: post.id, instagramAccountId: account.id, status: "success" },
+        })
+        results.push({ accountId: account.id, username: account.username, status: "success" })
+      } else {
+        throw new Error(publishData.error?.message || "Publish failed")
+      }
+    } catch (err: any) {
+      await prisma.postLog.create({
+        data: {
+          postId: post.id,
+          instagramAccountId: account.id,
+          status: "error",
+          errorMessage: err.message,
+        },
+      })
+      results.push({ accountId: account.id, username: account.username, status: "error", error: err.message })
+    }
   }
 
-  return (
-    <div>
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-white">Publicar conteúdo</h1>
-        <p className="text-gray-500 mt-1">Publique em múltiplas contas ao mesmo tempo</p>
-      </div>
+  const allSuccess = results.every((r) => r.status === "success")
+  await prisma.post.update({
+    where: { id: post.id },
+    data: { status: allSuccess ? "published" : "partial", publishedAt: new Date() },
+  })
 
-      <div className="grid grid-cols-5 gap-6">
-        <div className="col-span-3 space-y-4">
-          <div className="bg-[#111] border border-white/5 rounded-xl p-6 space-y-4">
-            <h2 className="font-semibold text-white text-sm">Conteúdo</h2>
-
-            {/* Video upload */}
-            <div>
-              <label className="text-xs text-gray-400 mb-1.5 block">Vídeo (Reel) — máx. 4MB</label>
-              <input ref={videoRef} type="file" accept="video/*" className="hidden"
-                onChange={e => setVideoFile(e.target.files?.[0] || null)} />
-              {videoFile ? (
-                <div className="flex items-center gap-3 bg-white/5 border border-white/10 rounded-lg px-3 py-2.5">
-                  <Film size={15} className="text-purple-400" />
-                  <span className="text-sm text-white flex-1 truncate">{videoFile.name}</span>
-                  <span className="text-xs text-gray-500">{formatSize(videoFile.size)}</span>
-                  <button onClick={() => setVideoFile(null)}><X size={14} className="text-gray-500 hover:text-white" /></button>
-                </div>
-              ) : (
-                <button onClick={() => videoRef.current?.click()}
-                  className="w-full flex items-center justify-center gap-2 bg-white/5 border border-dashed border-white/10 rounded-lg px-3 py-4 text-sm text-gray-500 hover:text-white hover:border-purple-500/50 transition-colors">
-                  <Film size={15} />
-                  Clique para selecionar vídeo
-                </button>
-              )}
-            </div>
-
-            {/* Image upload */}
-            <div>
-              <label className="text-xs text-gray-400 mb-1.5 block">Imagem (opcional) — máx. 4MB</label>
-              <input ref={imageRef} type="file" accept="image/*" className="hidden"
-                onChange={e => setImageFile(e.target.files?.[0] || null)} />
-              {imageFile ? (
-                <div className="flex items-center gap-3 bg-white/5 border border-white/10 rounded-lg px-3 py-2.5">
-                  <Image size={15} className="text-pink-400" />
-                  <span className="text-sm text-white flex-1 truncate">{imageFile.name}</span>
-                  <span className="text-xs text-gray-500">{formatSize(imageFile.size)}</span>
-                  <button onClick={() => setImageFile(null)}><X size={14} className="text-gray-500 hover:text-white" /></button>
-                </div>
-              ) : (
-                <button onClick={() => imageRef.current?.click()}
-                  className="w-full flex items-center justify-center gap-2 bg-white/5 border border-dashed border-white/10 rounded-lg px-3 py-4 text-sm text-gray-500 hover:text-white hover:border-pink-500/50 transition-colors">
-                  <Image size={15} />
-                  Clique para selecionar imagem
-                </button>
-              )}
-            </div>
-
-            <div>
-              <label className="text-xs text-gray-400 mb-1.5 block">Legenda</label>
-              <textarea value={caption} onChange={e => setCaption(e.target.value)}
-                placeholder="Escreva a legenda do post..." rows={4}
-                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-purple-500 resize-none" />
-            </div>
-
-            <div>
-              <label className="text-xs text-gray-400 mb-1.5 block">Hashtags</label>
-              <input value={hashtags} onChange={e => setHashtags(e.target.value)}
-                placeholder="#hashtag1 #hashtag2"
-                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-purple-500" />
-            </div>
-          </div>
-
-          <button onClick={publish} disabled={publishing}
-            className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:opacity-90 disabled:opacity-50 text-white font-medium py-3 rounded-xl transition-opacity">
-            {publishing ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
-            {publishing ? "Publicando..." : `Publicar em ${selectedAccounts.length} conta(s)`}
-          </button>
-
-          {results.length > 0 && (
-            <div className="bg-[#111] border border-white/5 rounded-xl p-5 space-y-3">
-              <h3 className="font-semibold text-white text-sm">Resultado</h3>
-              {results.map((r, i) => (
-                <div key={i} className="flex items-center gap-3">
-                  {r.status === "success" ? <CheckCircle size={15} className="text-green-400" /> : <XCircle size={15} className="text-red-400" />}
-                  <span className="text-sm text-gray-300">@{r.username}</span>
-                  <span className={`text-xs ml-auto ${r.status === "success" ? "text-green-400" : "text-red-400"}`}>
-                    {r.status === "success" ? "Publicado" : r.error || "Erro"}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div className="col-span-2">
-          <div className="bg-[#111] border border-white/5 rounded-xl p-5">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="font-semibold text-white text-sm">Contas</h2>
-              <button onClick={selectAll} className="text-xs text-purple-400 hover:text-purple-300">Todas</button>
-            </div>
-            {accounts.length === 0 ? (
-              <p className="text-gray-500 text-xs text-center py-6">Nenhuma conta conectada</p>
-            ) : (
-              <div className="space-y-2">
-                {accounts.map((account) => (
-                  <button key={account.id} onClick={() => toggleAccount(account.id)}
-                    className={`w-full flex items-center gap-3 p-3 rounded-lg transition-colors ${
-                      selectedAccounts.includes(account.id)
-                        ? "bg-purple-500/10 border border-purple-500/30"
-                        : "bg-white/3 border border-white/5 hover:bg-white/5"
-                    }`}>
-                    {account.profilePicture ? (
-                      <img src={account.profilePicture} alt="" className="w-8 h-8 rounded-full" />
-                    ) : (
-                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
-                        <Instagram size={13} className="text-white" />
-                      </div>
-                    )}
-                    <span className="text-sm text-white">@{account.username}</span>
-                    {selectedAccounts.includes(account.id) && <CheckCircle size={14} className="text-purple-400 ml-auto" />}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  )
+  return NextResponse.json({ post, results })
 }
