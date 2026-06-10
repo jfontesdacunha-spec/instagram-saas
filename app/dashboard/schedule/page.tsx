@@ -1,6 +1,6 @@
 "use client"
 import { useState } from "react"
-import { Calendar, Clock, Instagram, Trash2, Plus, Film, Image } from "lucide-react"
+import { Calendar, Clock, Trash2, Plus, Film, Image } from "lucide-react"
 
 type ScheduledPost = {
   id: string
@@ -10,7 +10,7 @@ type ScheduledPost = {
   hashtags: string
   type: "video" | "image"
   fileName: string
-  accounts: string[]
+  coverName?: string
 }
 
 export default function SchedulePage() {
@@ -21,6 +21,7 @@ export default function SchedulePage() {
   const [caption, setCaption] = useState("")
   const [hashtags, setHashtags] = useState("")
   const [fileName, setFileName] = useState("")
+  const [coverName, setCoverName] = useState("")
   const [fileType, setFileType] = useState<"video" | "image">("video")
 
   const addPost = () => {
@@ -33,7 +34,7 @@ export default function SchedulePage() {
       hashtags,
       type: fileType,
       fileName,
-      accounts: [],
+      coverName: fileType === "video" && coverName ? coverName : undefined,
     }
     setPosts(prev => [...prev, newPost].sort((a, b) => `${a.date}${a.time}`.localeCompare(`${b.date}${b.time}`)))
     setShowForm(false)
@@ -42,6 +43,7 @@ export default function SchedulePage() {
     setCaption("")
     setHashtags("")
     setFileName("")
+    setCoverName("")
   }
 
   const removePost = (id: string) => {
@@ -88,11 +90,11 @@ export default function SchedulePage() {
           <div>
             <label className="text-xs text-gray-400 mb-1.5 block">Tipo de conteúdo</label>
             <div className="flex gap-2">
-              <button onClick={() => setFileType("video")}
+              <button onClick={() => { setFileType("video"); setCoverName("") }}
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm transition-colors ${fileType === "video" ? "bg-purple-500/20 border border-purple-500/40 text-purple-300" : "bg-white/5 border border-white/10 text-gray-400 hover:text-white"}`}>
                 <Film size={14} /> Vídeo (Reel)
               </button>
-              <button onClick={() => setFileType("image")}
+              <button onClick={() => { setFileType("image"); setCoverName("") }}
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm transition-colors ${fileType === "image" ? "bg-pink-500/20 border border-pink-500/40 text-pink-300" : "bg-white/5 border border-white/10 text-gray-400 hover:text-white"}`}>
                 <Image size={14} /> Imagem
               </button>
@@ -102,9 +104,18 @@ export default function SchedulePage() {
           <div>
             <label className="text-xs text-gray-400 mb-1.5 block">Nome do arquivo</label>
             <input type="text" value={fileName} onChange={e => setFileName(e.target.value)}
-              placeholder="ex: meu-video.mp4"
+              placeholder={fileType === "video" ? "ex: meu-video.mp4" : "ex: minha-foto.jpg"}
               className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-purple-500" />
           </div>
+
+          {fileType === "video" && (
+            <div>
+              <label className="text-xs text-gray-400 mb-1.5 block">Capa do Reel <span className="text-gray-600">(opcional)</span></label>
+              <input type="text" value={coverName} onChange={e => setCoverName(e.target.value)}
+                placeholder="ex: capa.jpg"
+                className="w-full bg-white/5 border border-yellow-500/20 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-yellow-500" />
+            </div>
+          )}
 
           <div>
             <label className="text-xs text-gray-400 mb-1.5 block">Legenda</label>
@@ -150,6 +161,9 @@ export default function SchedulePage() {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm text-white font-medium truncate">{post.fileName}</p>
+                {post.coverName && (
+                  <p className="text-xs text-yellow-500/70 truncate mt-0.5">Capa: {post.coverName}</p>
+                )}
                 {post.caption && <p className="text-xs text-gray-500 truncate mt-0.5">{post.caption}</p>}
               </div>
               <div className="flex items-center gap-4 flex-shrink-0">
