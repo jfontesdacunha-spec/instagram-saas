@@ -118,7 +118,18 @@ export async function POST(request: Request) {
 
       if (!containerId) throw new Error("Failed to create media container")
 
-      await new Promise((r) => setTimeout(r, 5000))
+     // Aguardar processamento do vídeo (até 60 segundos)
+let status = "IN_PROGRESS"
+let attempts = 0
+while (status === "IN_PROGRESS" && attempts < 12) {
+  await new Promise((r) => setTimeout(r, 5000))
+  const statusRes = await fetch(
+    `https://graph.instagram.com/v19.0/${containerId}?fields=status_code&access_token=${account.accessToken}`
+  )
+  const statusData = await statusRes.json()
+  status = statusData.status_code || "FINISHED"
+  attempts++
+}
 
       const publishRes = await fetch(
         `https://graph.instagram.com/v19.0/${account.igUserId}/media_publish`,
