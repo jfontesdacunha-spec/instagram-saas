@@ -2,6 +2,21 @@ import { prisma } from "@/lib/prisma"
 import { NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 
+const MOBILE_USER_AGENTS = [
+  "Instagram 269.0.0.18.75 Android (26/8.0.0; 480dpi; 1080x1920; OnePlus; ONEPLUS A3003; OnePlus3; qcom; pt_BR; 314665256)",
+  "Instagram 261.0.0.21.111 Android (30/11; 420dpi; 1080x2340; samsung; SM-G991B; o1s; exynos2100; pt_BR; 306670813)",
+  "Instagram 275.0.0.27.98 Android (31/12; 440dpi; 1080x2400; Xiaomi; M2101K6G; alioth; qcom; pt_BR; 321468954)",
+  "Instagram 263.0.0.19.104 Android (29/10; 480dpi; 1080x2280; samsung; SM-A515F; a51; exynos9611; pt_BR; 309495735)",
+  "Instagram 265.0.0.20.301 Android (28/9.0; 420dpi; 1080x2220; Motorola; moto g7 play; channel; qcom; pt_BR; 311489654)",
+  "Instagram 271.0.0.22.96 Android (32/12L; 400dpi; 1080x2400; Google; Pixel 6; oriole; tensor; pt_BR; 317892341)",
+  "Instagram 273.0.0.25.107 Android (30/11; 560dpi; 1440x3200; samsung; SM-G998B; p3; exynos2100; pt_BR; 319234567)",
+  "Instagram 259.0.0.17.113 Android (27/8.1.0; 480dpi; 1080x1920; LGE; LG-H870; lucye; qcom; pt_BR; 304523198)",
+]
+
+function getRandomUserAgent() {
+  return MOBILE_USER_AGENTS[Math.floor(Math.random() * MOBILE_USER_AGENTS.length)]
+}
+
 async function uploadToCloudinary(buffer: Buffer, resourceType: "video" | "image", filename: string): Promise<string> {
   const cloudName = process.env.CLOUDINARY_CLOUD_NAME!
   const apiKey = process.env.CLOUDINARY_API_KEY!
@@ -41,6 +56,7 @@ export async function POST(request: Request) {
 
   const formData = await request.formData()
   const videoFile = formData.get("video") as File | null
+  const coverFile = formData.get("cover") as File | null
   const imageFile = formData.get("image") as File | null
   const caption = formData.get("caption") as string || ""
   const hashtags = formData.get("hashtags") as string || ""
@@ -49,13 +65,17 @@ export async function POST(request: Request) {
   const user = await prisma.user.findUnique({ where: { email: session.user.email } })
   if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 })
 
-  // Upload para Cloudinary
   let videoUrl = ""
+  let coverUrl = ""
   let imageUrl = ""
 
   if (videoFile) {
     const buffer = Buffer.from(await videoFile.arrayBuffer())
     videoUrl = await uploadToCloudinary(buffer, "video", videoFile.name)
+  }
+  if (coverFile) {
+    const buffer = Buffer.from(await coverFile.arrayBuffer())
+    coverUrl = await uploadToCloudinary(buffer, "image", coverFile.name)
   }
   if (imageFile) {
     const buffer = Buffer.from(await imageFile.arrayBuffer())
@@ -80,21 +100,31 @@ export async function POST(request: Request) {
   const results = []
   for (const account of accounts) {
     try {
+      const userAgent = getRandomUserAgent()
       const fullCaption = `${caption} ${hashtags}`.trim()
       let containerId = ""
 
       if (videoUrl) {
+        const body: any = {
+          media_type: "REELS",
+          video_url: videoUrl,
+          caption: fullCaption,
+          access_token: account.accessToken,
+        }
+        if (coverUrl) {
+          body.cover_url = coverUrl
+          body.thumb_offset = 0
+        }
+
         const containerRes = await fetch(
           `https://graph.instagram.com/v19.0/${account.igUserId}/media`,
           {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              media_type: "REELS",
-              video_url: videoUrl,
-              caption: fullCaption,
-              access_token: account.accessToken,
-            }),
+            headers: {
+              "Content-Type": "application/json",
+              "User-Agent": userAgent,
+            },
+            body: JSON.stringify(body),
           }
         )
         const containerData = await containerRes.json()
@@ -104,7 +134,10 @@ export async function POST(request: Request) {
           `https://graph.instagram.com/v19.0/${account.igUserId}/media`,
           {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: {
+              "Content-Type": "application/json",
+              "User-Agent": userAgent,
+            },
             body: JSON.stringify({
               image_url: imageUrl,
               caption: fullCaption,
@@ -118,24 +151,27 @@ export async function POST(request: Request) {
 
       if (!containerId) throw new Error("Failed to create media container")
 
-     // Aguardar processamento do vídeo (até 60 segundos)
-let status = "IN_PROGRESS"
-let attempts = 0
-while (status === "IN_PROGRESS" && attempts < 12) {
-  await new Promise((r) => setTimeout(r, 5000))
-  const statusRes = await fetch(
-    `https://graph.instagram.com/v19.0/${containerId}?fields=status_code&access_token=${account.accessToken}`
-  )
-  const statusData = await statusRes.json()
-  status = statusData.status_code || "FINISHED"
-  attempts++
-}
+      let status = "IN_PROGRESS"
+      let attempts = 0
+      while (status === "IN_PROGRESS" && attempts < 12) {
+        await new Promise((r) => setTimeout(r, 5000))
+        const statusRes = await fetch(
+          `https://graph.instagram.com/v19.0/${containerId}?fields=status_code&access_token=${account.accessToken}`,
+          { headers: { "User-Agent": userAgent } }
+        )
+        const statusData = await statusRes.json()
+        status = statusData.status_code || "FINISHED"
+        attempts++
+      }
 
       const publishRes = await fetch(
         `https://graph.instagram.com/v19.0/${account.igUserId}/media_publish`,
         {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            "User-Agent": userAgent,
+          },
           body: JSON.stringify({
             creation_id: containerId,
             access_token: account.accessToken,
