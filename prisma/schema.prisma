@@ -3,8 +3,8 @@ generator client {
 }
 
 datasource db {
- provider = "postgresql"
-url      = env("DATABASE_URL")
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 model User {
@@ -63,34 +63,9 @@ model InstagramAccount {
   tokenExpiresAt   DateTime?
   followerCount    Int?
   isActive         Boolean   @default(true)
+  proxy            String?
   lastActiveAt     DateTime  @default(now())
   createdAt        DateTime  @default(now())
   user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   postLogs         PostLog[]
-}
-
-model Post {
-  id          String    @id @default(cuid())
-  userId      String
-  videoUrl    String?
-  imageUrl    String?
-  caption     String?
-  hashtags    String?
-  status      String    @default("draft")
-  scheduledAt DateTime?
-  publishedAt DateTime?
-  createdAt   DateTime  @default(now())
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  logs        PostLog[]
-}
-
-model PostLog {
-  id                 String           @id @default(cuid())
-  postId             String
-  instagramAccountId String
-  status             String
-  errorMessage       String?
-  createdAt          DateTime         @default(now())
-  post               Post             @relation(fields: [postId], references: [id], onDelete: Cascade)
-  instagramAccount   InstagramAccount @relation(fields: [instagramAccountId], references: [id], onDelete: Cascade)
 }
