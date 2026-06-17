@@ -38,13 +38,16 @@ export default function SettingsPage() {
   const savePassword = async () => {
     setPasswordError("")
     if (!currentPassword || !newPassword || !confirmPassword) {
-      return setPasswordError("Preencha todos os campos")
+      setPasswordError("Preencha todos os campos")
+      return
     }
     if (newPassword.length < 6) {
-      return setPasswordError("A nova senha deve ter pelo menos 6 caracteres")
+      setPasswordError("A nova senha deve ter pelo menos 6 caracteres")
+      return
     }
     if (newPassword !== confirmPassword) {
-      return setPasswordError("As senhas não coincidem")
+      setPasswordError("As senhas não coincidem")
+      return
     }
     setSavingPassword(true)
     const res = await fetch("/api/user/change-password", {
@@ -74,7 +77,6 @@ export default function SettingsPage() {
 
       <div className="max-w-xl space-y-4">
 
-        {/* Nome */}
         <div className="bg-[#111] border border-white/5 rounded-xl p-6">
           <div className="flex items-center gap-2 mb-5">
             <User size={16} className="text-purple-400" />
@@ -96,7 +98,7 @@ export default function SettingsPage() {
               <input
                 type="text"
                 value={name}
-                onChange={e => setName(e.target.value)}
+                onChange={(e) => setName(e.target.value)}
                 placeholder="Seu nome"
                 className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-purple-500"
               />
@@ -112,7 +114,6 @@ export default function SettingsPage() {
           </div>
         </div>
 
-        {/* Senha */}
         <div className="bg-[#111] border border-white/5 rounded-xl p-6">
           <div className="flex items-center gap-2 mb-5">
             <Lock size={16} className="text-purple-400" />
@@ -126,7 +127,7 @@ export default function SettingsPage() {
                 <input
                   type={showCurrent ? "text" : "password"}
                   value={currentPassword}
-                  onChange={e => setCurrentPassword(e.target.value)}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
                   placeholder="••••••••"
                   className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 pr-10 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-purple-500"
                 />
@@ -140,34 +141,3 @@ export default function SettingsPage() {
               <div className="relative">
                 <input
                   type={showNew ? "text" : "password"}
-                  value={newPassword}
-                  onChange={e => setNewPassword(e.target.value)}
-                  placeholder="Mínimo 6 caracteres"
-                  className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 pr-10 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-purple-500"
-                />
-                <button onClick={() => setShowNew(!showNew)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white">
-                  {showNew ? <EyeOff size={14} /> : <Eye size={14} />}
-                </button>
-              </div>
-            </div>
-            <div>
-              <label className="text-xs text-gray-400 mb-1.5 block">Confirmar nova senha</label>
-              <input
-                type="password"
-                value={confirmPassword}
-                onChange={e => setConfirmPassword(e.target.value)}
-                placeholder="••••••••"
-                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-purple-500"
-              />
-            </div>
-
-            {passwordError && (
-              <p className="text-red-400 text-xs bg-red-400/10 border border-red-400/20 rounded-lg px-3 py-2">
-                {passwordError}
-              </p>
-            )}
-
-            <button
-              onClick={savePassword}
-              disabled={savingPassword}
-              className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700
