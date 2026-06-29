@@ -1,6 +1,6 @@
 "use client"
 import { useEffect, useState } from "react"
-import { Instagram, Plus, Trash2, RefreshCw, CheckCircle, XCircle } from "lucide-react"
+import { Instagram, Plus, Trash2, RefreshCw, CheckCircle, XCircle, Globe, Save } from "lucide-react"
 import { useSearchParams } from "next/navigation"
 
 const INSTAGRAM_AUTH_URL = `https://www.instagram.com/oauth/authorize?force_reauth=true&client_id=${process.env.NEXT_PUBLIC_INSTAGRAM_CLIENT_ID}&redirect_uri=${process.env.NEXT_PUBLIC_URL}/api/instagram/callback&response_type=code&scope=instagram_business_basic,instagram_business_manage_messages,instagram_business_manage_comments,instagram_business_content_publish,instagram_business_manage_insights`
@@ -8,6 +8,9 @@ const INSTAGRAM_AUTH_URL = `https://www.instagram.com/oauth/authorize?force_reau
 export default function AccountsPage() {
   const [accounts, setAccounts] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [proxyOpenFor, setProxyOpenFor] = useState<string | null>(null)
+  const [proxyValue, setProxyValue] = useState("")
+  const [savingProxy, setSavingProxy] = useState(false)
   const searchParams = useSearchParams()
   const success = searchParams.get("success")
   const error = searchParams.get("error")
@@ -29,6 +32,23 @@ export default function AccountsPage() {
       body: JSON.stringify({ id }),
     })
     fetchAccounts()
+  }
+
+  const openProxyEditor = (account: any) => {
+    setProxyOpenFor(account.id)
+    setProxyValue(account.proxy || "")
+  }
+
+  const saveProxy = async (accountId: string) => {
+    setSavingProxy(true)
+    await fetch("/api/instagram/accounts/proxy", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ accountId, proxy: proxyValue.trim() }),
+    })
+    await fetchAccounts()
+    setSavingProxy(false)
+    setProxyOpenFor(null)
   }
 
   return (
@@ -85,11 +105,55 @@ export default function AccountsPage() {
                 </div>
                 <div className={`w-2 h-2 rounded-full mt-1 ${account.isActive ? "bg-green-400" : "bg-red-400"}`} />
               </div>
-              <div className="flex items-center gap-1 text-xs text-gray-500 mb-4">
-                <span className={`px-2 py-0.5 rounded-full ${account.isActive ? "bg-green-500/10 text-green-400" : "bg-red-500/10 text-red-400"}`}>
+
+              <div className="flex items-center gap-2 mb-4">
+                <span className={`px-2 py-0.5 rounded-full text-xs ${account.isActive ? "bg-green-500/10 text-green-400" : "bg-red-500/10 text-red-400"}`}>
                   {account.isActive ? "Ativa" : "Inativa"}
                 </span>
+                {account.proxy && (
+                  <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-blue-500/10 text-blue-400">
+                    <Globe size={10} />
+                    Proxy
+                  </span>
+                )}
               </div>
+
+              {proxyOpenFor === account.id ? (
+                <div className="mb-3 space-y-2">
+                  <input
+                    type="text"
+                    value={proxyValue}
+                    onChange={e => setProxyValue(e.target.value)}
+                    placeholder="ip:porta:usuario:senha"
+                    className="w-full bg-white/5 border border-blue-500/30 rounded-lg px-3 py-2 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-blue-500"
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => saveProxy(account.id)}
+                      disabled={savingProxy}
+                      className="flex-1 flex items-center justify-center gap-1.5 text-xs bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 py-2 rounded-lg transition-colors disabled:opacity-50"
+                    >
+                      <Save size={11} />
+                      {savingProxy ? "Salvando..." : "Salvar"}
+                    </button>
+                    <button
+                      onClick={() => setProxyOpenFor(null)}
+                      className="px-3 text-xs text-gray-400 hover:text-white bg-white/5 hover:bg-white/10 py-2 rounded-lg transition-colors"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  onClick={() => openProxyEditor(account)}
+                  className="w-full flex items-center justify-center gap-1.5 text-xs text-gray-400 hover:text-blue-300 bg-white/5 hover:bg-blue-500/10 py-2 rounded-lg transition-colors mb-2"
+                >
+                  <Globe size={12} />
+                  {account.proxy ? "Editar proxy" : "Adicionar proxy"}
+                </button>
+              )}
+
               <div className="flex gap-2">
                 <a href={INSTAGRAM_AUTH_URL} className="flex-1 flex items-center justify-center gap-1.5 text-xs text-gray-400 hover:text-white bg-white/5 hover:bg-white/10 py-2 rounded-lg transition-colors">
                   <RefreshCw size={12} />
