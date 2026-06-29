@@ -91,6 +91,7 @@ model PostLog {
   instagramAccountId String
   status             String
   errorMessage       String?
+  mediaId            String?
   createdAt          DateTime         @default(now())
   post               Post             @relation(fields: [postId], references: [id], onDelete: Cascade)
   instagramAccount   InstagramAccount @relation(fields: [instagramAccountId], references: [id], onDelete: Cascade)
