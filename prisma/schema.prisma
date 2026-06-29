@@ -18,6 +18,7 @@ model User {
   sessions      Session[]
   igAccounts    InstagramAccount[]
   posts         Post[]
+  media         MediaLibrary[]
   createdAt     DateTime  @default(now())
 }
 
@@ -95,4 +96,14 @@ model PostLog {
   createdAt          DateTime         @default(now())
   post               Post             @relation(fields: [postId], references: [id], onDelete: Cascade)
   instagramAccount   InstagramAccount @relation(fields: [instagramAccountId], references: [id], onDelete: Cascade)
+}
+
+model MediaLibrary {
+  id        String   @id @default(cuid())
+  userId    String
+  url       String
+  type      String
+  fileName  String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
