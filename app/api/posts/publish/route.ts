@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma"
 import { NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
+import { getProxyAgent } from "@/lib/proxy"
 
 const MOBILE_USER_AGENTS = [
   "Instagram 269.0.0.18.75 Android (26/8.0.0; 480dpi; 1080x1920; OnePlus; ONEPLUS A3003; OnePlus3; qcom; pt_BR; 314665256)",
@@ -101,6 +102,7 @@ export async function POST(request: Request) {
   for (const account of accounts) {
     try {
       const userAgent = getRandomUserAgent()
+      const agent = getProxyAgent(account.proxy)
       const fullCaption = `${caption} ${hashtags}`.trim()
       let containerId = ""
 
@@ -125,6 +127,8 @@ export async function POST(request: Request) {
               "User-Agent": userAgent,
             },
             body: JSON.stringify(body),
+            // @ts-ignore
+            agent,
           }
         )
         const containerData = await containerRes.json()
@@ -143,6 +147,8 @@ export async function POST(request: Request) {
               caption: fullCaption,
               access_token: account.accessToken,
             }),
+            // @ts-ignore
+            agent,
           }
         )
         const containerData = await containerRes.json()
@@ -157,7 +163,11 @@ export async function POST(request: Request) {
         await new Promise((r) => setTimeout(r, 5000))
         const statusRes = await fetch(
           `https://graph.instagram.com/v19.0/${containerId}?fields=status_code&access_token=${account.accessToken}`,
-          { headers: { "User-Agent": userAgent } }
+          {
+            headers: { "User-Agent": userAgent },
+            // @ts-ignore
+            agent,
+          }
         )
         const statusData = await statusRes.json()
         status = statusData.status_code || "FINISHED"
@@ -176,6 +186,8 @@ export async function POST(request: Request) {
             creation_id: containerId,
             access_token: account.accessToken,
           }),
+          // @ts-ignore
+          agent,
         }
       )
       const publishData = await publishRes.json()
