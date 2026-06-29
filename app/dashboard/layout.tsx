@@ -6,7 +6,7 @@ import Link from "next/link"
 import {
   LayoutDashboard, Instagram, Upload, Calendar,
   History, Settings, LogOut, Zap, FolderOpen,
-  ListChecks, Star
+  ListChecks, Star, TrendingUp
 } from "lucide-react"
 
 const navGroups = [
@@ -28,6 +28,7 @@ const navGroups = [
     label: "Conteúdo",
     items: [
       { href: "/dashboard/library", icon: FolderOpen, label: "Biblioteca" },
+      { href: "/dashboard/performance", icon: TrendingUp, label: "Performance" },
       { href: "/dashboard/history", icon: History, label: "Histórico" },
     ],
   },
