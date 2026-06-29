@@ -194,7 +194,7 @@ export async function POST(request: Request) {
 
       if (publishData.id) {
         await prisma.postLog.create({
-          data: { postId: post.id, instagramAccountId: account.id, status: "success" },
+          data: { postId: post.id, instagramAccountId: account.id, status: "success", mediaId: publishData.id },
         })
         results.push({ accountId: account.id, username: account.username, status: "success" })
       } else {
