@@ -5,16 +5,45 @@ import { useEffect } from "react"
 import Link from "next/link"
 import {
   LayoutDashboard, Instagram, Upload, Calendar,
-  History, Settings, LogOut, Zap
+  History, Settings, LogOut, Zap, FolderOpen,
+  ListChecks, Star
 } from "lucide-react"
 
-const navItems = [
-  { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
-  { href: "/dashboard/accounts", icon: Instagram, label: "Contas" },
-  { href: "/dashboard/publish", icon: Upload, label: "Publicar" },
-  { href: "/dashboard/schedule", icon: Calendar, label: "Agendamentos" },
-  { href: "/dashboard/history", icon: History, label: "Histórico" },
-  { href: "/dashboard/settings", icon: Settings, label: "Configurações" },
+const navGroups = [
+  {
+    label: "Principal",
+    items: [
+      { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
+    ],
+  },
+  {
+    label: "Publicação",
+    items: [
+      { href: "/dashboard/publish", icon: Upload, label: "Postar" },
+      { href: "/dashboard/schedule", icon: Calendar, label: "Agendamentos" },
+      { href: "/dashboard/stories", icon: Star, label: "Stories" },
+    ],
+  },
+  {
+    label: "Conteúdo",
+    items: [
+      { href: "/dashboard/library", icon: FolderOpen, label: "Biblioteca" },
+      { href: "/dashboard/history", icon: History, label: "Histórico" },
+    ],
+  },
+  {
+    label: "Operação",
+    items: [
+      { href: "/dashboard/accounts", icon: Instagram, label: "Contas" },
+      { href: "/dashboard/queue", icon: ListChecks, label: "Status da Fila" },
+    ],
+  },
+  {
+    label: "Conta",
+    items: [
+      { href: "/dashboard/settings", icon: Settings, label: "Configurações" },
+    ],
+  },
 ]
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -36,9 +65,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="min-h-screen bg-[#0a0a0a] flex">
-      {/* Sidebar */}
       <aside className="w-60 bg-[#0d0d0d] border-r border-white/5 flex flex-col fixed h-full">
-        {/* Logo */}
         <div className="p-6 border-b border-white/5">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
@@ -48,28 +75,35 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
         </div>
 
-        {/* Nav */}
-        <nav className="flex-1 p-4 space-y-1">
-          {navItems.map((item) => {
-            const active = pathname === item.href
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                  active
-                    ? "bg-purple-500/15 text-purple-400"
-                    : "text-gray-500 hover:text-gray-200 hover:bg-white/5"
-                }`}
-              >
-                <item.icon size={16} />
-                {item.label}
-              </Link>
-            )
-          })}
+        <nav className="flex-1 p-4 space-y-5 overflow-y-auto">
+          {navGroups.map((group) => (
+            <div key={group.label}>
+              <p className="text-[10px] font-semibold text-gray-600 uppercase tracking-wider px-3 mb-2">
+                {group.label}
+              </p>
+              <div className="space-y-1">
+                {group.items.map((item) => {
+                  const active = pathname === item.href
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                        active
+                          ? "bg-purple-500/15 text-purple-400"
+                          : "text-gray-500 hover:text-gray-200 hover:bg-white/5"
+                      }`}
+                    >
+                      <item.icon size={16} />
+                      {item.label}
+                    </Link>
+                  )
+                })}
+              </div>
+            </div>
+          ))}
         </nav>
 
-        {/* User */}
         <div className="p-4 border-t border-white/5">
           <div className="flex items-center gap-3 mb-3">
             {session?.user?.image && (
@@ -90,7 +124,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </div>
       </aside>
 
-      {/* Content */}
       <main className="flex-1 ml-60 p-8">
         {children}
       </main>
