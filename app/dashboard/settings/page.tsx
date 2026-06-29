@@ -5,11 +5,9 @@ import { User, Lock, LogOut, Save, Eye, EyeOff } from "lucide-react"
 
 export default function SettingsPage() {
   const { data: session, update } = useSession()
-
   const [name, setName] = useState(session?.user?.name || "")
   const [savingName, setSavingName] = useState(false)
   const [nameSuccess, setNameSuccess] = useState(false)
-
   const [currentPassword, setCurrentPassword] = useState("")
   const [newPassword, setNewPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
@@ -74,15 +72,12 @@ export default function SettingsPage() {
         <h1 className="text-2xl font-bold text-white">Configurações</h1>
         <p className="text-gray-500 mt-1">Gerencie sua conta</p>
       </div>
-
       <div className="max-w-xl space-y-4">
-
         <div className="bg-[#111] border border-white/5 rounded-xl p-6">
           <div className="flex items-center gap-2 mb-5">
             <User size={16} className="text-purple-400" />
             <h2 className="font-semibold text-white text-sm">Informações pessoais</h2>
           </div>
-
           <div className="space-y-4">
             <div>
               <label className="text-xs text-gray-400 mb-1.5 block">Email</label>
@@ -113,13 +108,11 @@ export default function SettingsPage() {
             </button>
           </div>
         </div>
-
         <div className="bg-[#111] border border-white/5 rounded-xl p-6">
           <div className="flex items-center gap-2 mb-5">
             <Lock size={16} className="text-purple-400" />
             <h2 className="font-semibold text-white text-sm">Alterar senha</h2>
           </div>
-
           <div className="space-y-4">
             <div>
               <label className="text-xs text-gray-400 mb-1.5 block">Senha atual</label>
@@ -141,3 +134,56 @@ export default function SettingsPage() {
               <div className="relative">
                 <input
                   type={showNew ? "text" : "password"}
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="Mínimo 6 caracteres"
+                  className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 pr-10 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-purple-500"
+                />
+                <button onClick={() => setShowNew(!showNew)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white">
+                  {showNew ? <EyeOff size={14} /> : <Eye size={14} />}
+                </button>
+              </div>
+            </div>
+            <div>
+              <label className="text-xs text-gray-400 mb-1.5 block">Confirmar nova senha</label>
+              <input
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder="••••••••"
+                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-purple-500"
+              />
+            </div>
+            {passwordError && (
+              <p className="text-red-400 text-xs bg-red-400/10 border border-red-400/20 rounded-lg px-3 py-2">
+                {passwordError}
+              </p>
+            )}
+            <button
+              onClick={savePassword}
+              disabled={savingPassword}
+              className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white text-sm font-medium px-4 py-2.5 rounded-lg transition-colors"
+            >
+              <Save size={14} />
+              {savingPassword ? "Salvando..." : passwordSuccess ? "Senha alterada!" : "Alterar senha"}
+            </button>
+          </div>
+        </div>
+        <div className="bg-[#111] border border-white/5 rounded-xl p-6">
+          <div className="flex items-center gap-2 mb-4">
+            <LogOut size={16} className="text-red-400" />
+            <h2 className="font-semibold text-white text-sm">Sair da conta</h2>
+          </div>
+          <p className="text-sm text-gray-500 mb-4">Você será desconectado e redirecionado para a página de login.</p>
+          <button
+            onClick={() => signOut({ callbackUrl: "/login" })}
+            className="flex items-center gap-2 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-400 text-sm font-medium px-4 py-2.5 rounded-lg transition-colors"
+          >
+            <LogOut size={14} />
+            Sair da conta
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
