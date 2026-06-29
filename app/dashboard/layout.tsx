@@ -6,8 +6,10 @@ import Link from "next/link"
 import {
   LayoutDashboard, Instagram, Upload, Calendar,
   History, Settings, LogOut, Zap, FolderOpen,
-  ListChecks, Star, TrendingUp
+  ListChecks, Star, TrendingUp, Shield
 } from "lucide-react"
+
+const ADMIN_EMAIL = "jfontesdacunha@gmail.com"
 
 const navGroups = [
   {
@@ -64,6 +66,20 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     )
   }
 
+  const isAdmin = session?.user?.email === ADMIN_EMAIL
+
+  const groups = isAdmin
+    ? [
+        ...navGroups,
+        {
+          label: "Administração",
+          items: [
+            { href: "/dashboard/admin", icon: Shield, label: "Painel Admin" },
+          ],
+        },
+      ]
+    : navGroups
+
   return (
     <div className="min-h-screen bg-[#0a0a0a] flex">
       <aside className="w-60 bg-[#0d0d0d] border-r border-white/5 flex flex-col fixed h-full">
@@ -77,7 +93,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </div>
 
         <nav className="flex-1 p-4 space-y-5 overflow-y-auto">
-          {navGroups.map((group) => (
+          {groups.map((group) => (
             <div key={group.label}>
               <p className="text-[10px] font-semibold text-gray-600 uppercase tracking-wider px-3 mb-2">
                 {group.label}
