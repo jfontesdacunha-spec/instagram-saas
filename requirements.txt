@@ -1,7 +1,4 @@
 instagrapi
 fastapi
-uvicorn
-requests
-python-dotenv
 pydantic
 python-multipart

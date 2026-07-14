@@ -72,13 +72,14 @@ export default function AccountsPage() {
       const data = await res.json()
 
       if (!res.ok) {
-        if (data.error && data.error.includes("ChallengeRequired")) {
+        // Tentar capturar o erro de várias formas possíveis (FastAPI ou Next.js)
+        const errorMessage = data.detail || data.error || data.message || "Erro desconhecido no servidor";
+        
+        if (errorMessage.includes("ChallengeRequired")) {
           setShow2FA(true)
           setLoginError("Código 2FA necessário. Por favor, insira abaixo.")
         } else {
-          // Mostrar o erro detalhado vindo do Worker ou do Next.js
-          const errorMsg = typeof data.error === 'string' ? data.error : JSON.stringify(data.error);
-          setLoginError(`Erro: ${errorMsg}`);
+          setLoginError(`Erro: ${errorMessage}`);
         }
       } else {
         setIsLoginModalOpen(false)
