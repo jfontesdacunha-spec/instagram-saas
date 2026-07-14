@@ -60,7 +60,10 @@ model InstagramAccount {
   igUserId         String    @unique
   username         String
   profilePicture   String?
-  accessToken      String
+  accessToken      String?
+  instagramUsername String?
+  instagramPassword String?
+  sessionFilePath   String?
   tokenExpiresAt   DateTime?
   followerCount    Int?
   isActive         Boolean   @default(true)

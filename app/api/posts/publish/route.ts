@@ -3,20 +3,10 @@ import { NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { getProxyAgent } from "@/lib/proxy"
 
-const MOBILE_USER_AGENTS = [
-  "Instagram 269.0.0.18.75 Android (26/8.0.0; 480dpi; 1080x1920; OnePlus; ONEPLUS A3003; OnePlus3; qcom; pt_BR; 314665256)",
-  "Instagram 261.0.0.21.111 Android (30/11; 420dpi; 1080x2340; samsung; SM-G991B; o1s; exynos2100; pt_BR; 306670813)",
-  "Instagram 275.0.0.27.98 Android (31/12; 440dpi; 1080x2400; Xiaomi; M2101K6G; alioth; qcom; pt_BR; 321468954)",
-  "Instagram 263.0.0.19.104 Android (29/10; 480dpi; 1080x2280; samsung; SM-A515F; a51; exynos9611; pt_BR; 309495735)",
-  "Instagram 265.0.0.20.301 Android (28/9.0; 420dpi; 1080x2220; Motorola; moto g7 play; channel; qcom; pt_BR; 311489654)",
-  "Instagram 271.0.0.22.96 Android (32/12L; 400dpi; 1080x2400; Google; Pixel 6; oriole; tensor; pt_BR; 317892341)",
-  "Instagram 273.0.0.25.107 Android (30/11; 560dpi; 1440x3200; samsung; SM-G998B; p3; exynos2100; pt_BR; 319234567)",
-  "Instagram 259.0.0.17.113 Android (27/8.1.0; 480dpi; 1080x1920; LGE; LG-H870; lucye; qcom; pt_BR; 304523198)",
-]
+// URL do Worker Python
+const INSTAGRAPI_WORKER_URL = process.env.INSTAGRAPI_WORKER_URL || "http://localhost:8000"
 
-function getRandomUserAgent() {
-  return MOBILE_USER_AGENTS[Math.floor(Math.random() * MOBILE_USER_AGENTS.length)]
-}
+
 
 async function uploadToCloudinary(buffer: Buffer, resourceType: "video" | "image", filename: string): Promise<string> {
   const cloudName = process.env.CLOUDINARY_CLOUD_NAME!
@@ -101,100 +91,42 @@ export async function POST(request: Request) {
   const results = []
   for (const account of accounts) {
     try {
-      const userAgent = getRandomUserAgent()
-      const agent = getProxyAgent(account.proxy)
       const fullCaption = `${caption} ${hashtags}`.trim()
-      let containerId = ""
+      let mediaType: "photo" | "video" = "photo"
+      let mediaUrlToPost = imageUrl
 
       if (videoUrl) {
-        const body: any = {
-          media_type: "REELS",
-          video_url: videoUrl,
+        mediaType = "video"
+        mediaUrlToPost = videoUrl
+      }
+
+      if (!mediaUrlToPost) {
+        throw new Error("Nenhuma mídia para postar.")
+      }
+
+      // Chamar o Worker Python para postar
+      const workerPostResponse = await fetch(`${INSTAGRAPI_WORKER_URL}/post`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          account_id: account.instagramUsername, // Usar o username do Instagram
+          media_type: mediaType,
+          media_url: mediaUrlToPost,
           caption: fullCaption,
-          access_token: account.accessToken,
-        }
-        if (coverUrl) {
-          body.cover_url = coverUrl
-          body.thumb_offset = 0
-        }
+          cover_url: coverUrl, // Apenas para vídeos
+        }),
+      })
 
-        const containerRes = await fetch(
-          `https://graph.instagram.com/v19.0/${account.igUserId}/media`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "User-Agent": userAgent,
-            },
-            body: JSON.stringify(body),
-            // @ts-ignore
-            agent,
-          }
-        )
-        const containerData = await containerRes.json()
-        containerId = containerData.id
-      } else if (imageUrl) {
-        const containerRes = await fetch(
-          `https://graph.instagram.com/v19.0/${account.igUserId}/media`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "User-Agent": userAgent,
-            },
-            body: JSON.stringify({
-              image_url: imageUrl,
-              caption: fullCaption,
-              access_token: account.accessToken,
-            }),
-            // @ts-ignore
-            agent,
-          }
-        )
-        const containerData = await containerRes.json()
-        containerId = containerData.id
+      const workerPostData = await workerPostResponse.json()
+
+      if (!workerPostResponse.ok) {
+        throw new Error(workerPostData.detail || "Erro ao postar via Worker Instagrapi")
       }
 
-      if (!containerId) throw new Error("Failed to create media container")
-
-      let status = "IN_PROGRESS"
-      let attempts = 0
-      while (status === "IN_PROGRESS" && attempts < 12) {
-        await new Promise((r) => setTimeout(r, 5000))
-        const statusRes = await fetch(
-          `https://graph.instagram.com/v19.0/${containerId}?fields=status_code&access_token=${account.accessToken}`,
-          {
-            headers: { "User-Agent": userAgent },
-            // @ts-ignore
-            agent,
-          }
-        )
-        const statusData = await statusRes.json()
-        status = statusData.status_code || "FINISHED"
-        attempts++
-      }
-
-      const publishRes = await fetch(
-        `https://graph.instagram.com/v19.0/${account.igUserId}/media_publish`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "User-Agent": userAgent,
-          },
-          body: JSON.stringify({
-            creation_id: containerId,
-            access_token: account.accessToken,
-          }),
-          // @ts-ignore
-          agent,
-        }
-      )
-      const publishData = await publishRes.json()
-
-      if (publishData.id) {
+      // O workerPostData deve conter o resultado da postagem, incluindo o mediaId
+      if (workerPostData.result && workerPostData.result.pk) {
         await prisma.postLog.create({
-          data: { postId: post.id, instagramAccountId: account.id, status: "success", mediaId: publishData.id },
+          data: { postId: post.id, instagramAccountId: account.id, status: "success", mediaId: workerPostData.result.pk },
         })
         results.push({ accountId: account.id, username: account.username, status: "success" })
       } else {
