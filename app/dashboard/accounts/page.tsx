@@ -75,7 +75,9 @@ export default function AccountsPage() {
           setShow2FA(true)
           setLoginError("Código 2FA necessário. Por favor, insira abaixo.")
         } else {
-          setLoginError(data.error || "Erro ao conectar. Verifique os dados.")
+          // Mostrar o erro detalhado vindo do Worker ou do Next.js
+          const errorMsg = typeof data.error === 'string' ? data.error : JSON.stringify(data.error);
+          setLoginError(`Erro: ${errorMsg}`);
         }
       } else {
         setIsLoginModalOpen(false)
