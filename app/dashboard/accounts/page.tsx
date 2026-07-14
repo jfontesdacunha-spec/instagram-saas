@@ -62,7 +62,8 @@ export default function AccountsPage() {
     setLoginError(null)
 
     try {
-      const res = await fetch("/api/instagram/instagrapi-login", {
+      // Tentar a API interna da Vercel primeiro
+      const res = await fetch("/api/python/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(loginData),
