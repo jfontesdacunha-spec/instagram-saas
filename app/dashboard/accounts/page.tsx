@@ -1,6 +1,6 @@
 "use client"
 import { useEffect, useState } from "react"
-import { Instagram, Plus, Trash2, RefreshCw, CheckCircle, XCircle, Globe, Save } from "lucide-react"
+import { Instagram, Plus, Trash2, RefreshCw, CheckCircle, XCircle, Globe, Save, Lock, User, Key } from "lucide-react"
 import { useSearchParams } from "next/navigation"
 
 const INSTAGRAM_AUTH_URL = `https://www.instagram.com/oauth/authorize?force_reauth=true&client_id=${process.env.NEXT_PUBLIC_INSTAGRAM_CLIENT_ID}&redirect_uri=${process.env.NEXT_PUBLIC_URL}/api/instagram/callback&response_type=code&scope=instagram_business_basic,instagram_business_manage_messages,instagram_business_manage_comments,instagram_business_content_publish,instagram_business_manage_insights`
@@ -11,6 +11,11 @@ export default function AccountsPage() {
   const [proxyOpenFor, setProxyOpenFor] = useState<string | null>(null)
   const [proxyValue, setProxyValue] = useState("")
   const [savingProxy, setSavingProxy] = useState(false)
+  const [isLoginModalOpen, setIsLoginModalOpen] = useState(false)
+  const [loginData, setLoginData] = useState({ username: "", password: "", verificationCode: "", proxy: "" })
+  const [isLoggingIn, setIsLoggingIn] = useState(false)
+  const [loginError, setLoginError] = useState<string | null>(null)
+  const [show2FA, setShow2FA] = useState(false)
   const searchParams = useSearchParams()
   const success = searchParams.get("success")
   const error = searchParams.get("error")
@@ -51,6 +56,40 @@ export default function AccountsPage() {
     setProxyOpenFor(null)
   }
 
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setIsLoggingIn(true)
+    setLoginError(null)
+
+    try {
+      const res = await fetch("/api/instagram/instagrapi-login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(loginData),
+      })
+
+      const data = await res.json()
+
+      if (!res.ok) {
+        if (data.error && data.error.includes("ChallengeRequired")) {
+          setShow2FA(true)
+          setLoginError("Código 2FA necessário. Por favor, insira abaixo.")
+        } else {
+          setLoginError(data.error || "Erro ao conectar. Verifique os dados.")
+        }
+      } else {
+        setIsLoginModalOpen(false)
+        setLoginData({ username: "", password: "", verificationCode: "", proxy: "" })
+        setShow2FA(false)
+        fetchAccounts()
+      }
+    } catch (err) {
+      setLoginError("Erro de conexão com o servidor.")
+    } finally {
+      setIsLoggingIn(false)
+    }
+  }
+
   return (
     <div>
       <div className="flex items-center justify-between mb-8">
@@ -58,10 +97,13 @@ export default function AccountsPage() {
           <h1 className="text-2xl font-bold text-white">Contas do Instagram</h1>
           <p className="text-gray-500 mt-1">{accounts.length}/30 contas conectadas</p>
         </div>
-        <a href={INSTAGRAM_AUTH_URL} className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:opacity-90 text-white text-sm font-medium px-5 py-2.5 rounded-lg transition-opacity">
+        <button 
+          onClick={() => setIsLoginModalOpen(true)}
+          className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:opacity-90 text-white text-sm font-medium px-5 py-2.5 rounded-lg transition-opacity"
+        >
           <Plus size={15} />
           Conectar Instagram
-        </a>
+        </button>
       </div>
 
       {success && (
@@ -175,10 +217,115 @@ export default function AccountsPage() {
           </div>
           <h3 className="font-semibold text-white mb-2">Nenhuma conta ainda</h3>
           <p className="text-gray-500 text-sm mb-6 max-w-xs mx-auto">Clique em Conectar Instagram para adicionar sua primeira conta</p>
-          <a href={INSTAGRAM_AUTH_URL} className="inline-flex items-center gap-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white text-sm font-medium px-6 py-3 rounded-lg hover:opacity-90 transition-opacity">
+          <button 
+            onClick={() => setIsLoginModalOpen(true)}
+            className="inline-flex items-center gap-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white text-sm font-medium px-6 py-3 rounded-lg hover:opacity-90 transition-opacity"
+          >
             <Plus size={15} />
             Conectar Instagram
-          </a>
+          </button>
+        </div>
+      )}
+
+      {/* Modal de Login Instagrapi */}
+      {isLoginModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="bg-[#111] border border-white/10 rounded-2xl w-full max-w-md p-8 shadow-2xl">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-bold text-white">Conectar Conta</h2>
+              <button onClick={() => setIsLoginModalOpen(false)} className="text-gray-500 hover:text-white transition-colors">
+                <XCircle size={24} />
+              </button>
+            </div>
+
+            <form onSubmit={handleLogin} className="space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-gray-400 mb-1.5 ml-1">Usuário do Instagram</label>
+                <div className="relative">
+                  <User className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={16} />
+                  <input
+                    type="text"
+                    required
+                    value={loginData.username}
+                    onChange={e => setLoginData({...loginData, username: e.target.value})}
+                    placeholder="ex: @seu_usuario"
+                    className="w-full bg-white/5 border border-white/10 rounded-xl pl-10 pr-4 py-3 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-purple-500 transition-colors"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-400 mb-1.5 ml-1">Senha</label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={16} />
+                  <input
+                    type="password"
+                    required
+                    value={loginData.password}
+                    onChange={e => setLoginData({...loginData, password: e.target.value})}
+                    placeholder="••••••••"
+                    className="w-full bg-white/5 border border-white/10 rounded-xl pl-10 pr-4 py-3 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-purple-500 transition-colors"
+                  />
+                </div>
+              </div>
+
+              {show2FA && (
+                <div className="animate-in fade-in slide-in-from-top-2 duration-300">
+                  <label className="block text-xs font-medium text-purple-400 mb-1.5 ml-1">Código 2FA (6 dígitos)</label>
+                  <div className="relative">
+                    <Key className="absolute left-3 top-1/2 -translate-y-1/2 text-purple-400" size={16} />
+                    <input
+                      type="text"
+                      required
+                      value={loginData.verificationCode}
+                      onChange={e => setLoginData({...loginData, verificationCode: e.target.value})}
+                      placeholder="000000"
+                      className="w-full bg-purple-500/5 border border-purple-500/30 rounded-xl pl-10 pr-4 py-3 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-purple-500 transition-colors"
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs font-medium text-gray-400 mb-1.5 ml-1">Proxy (Opcional)</label>
+                <div className="relative">
+                  <Globe className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={16} />
+                  <input
+                    type="text"
+                    value={loginData.proxy}
+                    onChange={e => setLoginData({...loginData, proxy: e.target.value})}
+                    placeholder="ip:porta:usuario:senha"
+                    className="w-full bg-white/5 border border-white/10 rounded-xl pl-10 pr-4 py-3 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-purple-500 transition-colors"
+                  />
+                </div>
+              </div>
+
+              {loginError && (
+                <p className="text-red-400 text-xs font-medium bg-red-400/10 border border-red-400/20 rounded-lg p-3">
+                  {loginError}
+                </p>
+              )}
+
+              <button
+                type="submit"
+                disabled={isLoggingIn}
+                className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white font-semibold py-3.5 rounded-xl hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 mt-2"
+              >
+                {isLoggingIn ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    {show2FA ? "Verificando..." : "Conectando..."}
+                  </>
+                ) : (
+                  show2FA ? "Verificar Código" : "Entrar agora"
+                )}
+              </button>
+              
+              <p className="text-[10px] text-gray-500 text-center px-4">
+                Suas credenciais são usadas apenas para criar uma sessão segura e não são compartilhadas.
+              </p>
+            </form>
+          </div>
         </div>
       )}
     </div>
