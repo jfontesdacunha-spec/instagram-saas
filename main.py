@@ -29,6 +29,10 @@ from worker import get_instagrapi_client, post_photo, post_video
 
 app = FastAPI()
 
+@app.get("/")
+async def root():
+    return {"status": "ok", "message": "Instagrapi Worker is running"}
+
 # Diretório para armazenar as sessões
 SESSIONS_DIR = "./sessions"
 os.makedirs(SESSIONS_DIR, exist_ok=True)
