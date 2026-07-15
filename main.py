@@ -112,5 +112,7 @@ async def get_user_info(req: LoginRequest):
 if __name__ == "__main__":
     import uvicorn
     import os
+    # O Railway usa a variável PORT, mas vamos garantir que funcione em qualquer lugar
     port = int(os.environ.get("PORT", 8080))
+    print(f"Iniciando servidor na porta {port}...")
     uvicorn.run(app, host="0.0.0.0", port=port)
