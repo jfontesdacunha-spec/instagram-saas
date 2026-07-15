@@ -62,17 +62,11 @@ export default function AccountsPage() {
     setLoginError(null)
 
     try {
-      // Usar o Worker externo no Railway que é mais robusto para instagrapi
-      const workerUrl = process.env.NEXT_PUBLIC_INSTAGRAPI_WORKER_URL || "https://instagram-saas-production.up.railway.app";
-      const res = await fetch(`${workerUrl}/login`, {
+      // Usar a rota interna da Vercel (Node.js) para evitar problemas de conexão externa
+      const res = await fetch("/api/instagram/instagrapi-login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          username: loginData.username,
-          password: loginData.password,
-          verification_code: loginData.verificationCode,
-          proxy: loginData.proxy
-        }),
+        body: JSON.stringify(loginData),
       })
 
       const data = await res.json()

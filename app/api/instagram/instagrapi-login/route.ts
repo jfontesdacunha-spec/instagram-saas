@@ -1,96 +1,103 @@
-
-import { prisma } from "@/lib/prisma"
 import { NextResponse } from "next/server"
+import { IgApiClient } from "instagram-private-api"
+import { prisma } from "@/lib/prisma"
 import { getServerSession } from "next-auth"
+import { authOptions } from "@/lib/auth"
 
-export async function POST(request: Request) {
-  const session = await getServerSession()
-  if (!session?.user?.email) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
-
-  const { username, password, verificationCode, proxy } = await request.json()
-
-  if (!username || !password) {
-    return NextResponse.json({ error: "Username and password are required" }, { status: 400 })
-  }
-
+export async function POST(req: Request) {
   try {
-    // Chamar o Worker Python para tentar o login
-    const workerResponse = await fetch(`${process.env.INSTAGRAPI_WORKER_URL}/login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        username,
-        password,
-        verification_code: verificationCode,
-        proxy,
-      }),
-    })
-
-    const workerData = await workerResponse.json()
-
-    if (!workerResponse.ok) {
-      // Se o Worker retornar um erro (ex: 2FA, senha incorreta)
-      return NextResponse.json({ error: workerData.detail || "Erro no Worker Instagrapi" }, { status: workerResponse.status })
+    const session = await getServerSession(authOptions)
+    if (!session) {
+      return NextResponse.json({ error: "Não autorizado" }, { status: 401 })
     }
 
-    // Login bem-sucedido, agora precisamos salvar as informações no banco de dados
-    const user = await prisma.user.findUnique({ where: { email: session.user.email! } })
-    if (!user) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 })
+    const { username, password, verificationCode, proxy } = await req.json()
+
+    const ig = new IgApiClient()
+    
+    // Configurar proxy se fornecido
+    if (proxy) {
+      ig.state.proxyUrl = proxy
     }
 
-    // O Worker Python salva a sessão em um arquivo. O caminho é inferido.
-    const sessionFilePath = `./sessions/${username}_session.json`
+    ig.state.generateDevice(username)
 
-    // Chamar o Worker Python para obter informações do usuário após o login
-    const userInfoResponse = await fetch(`${process.env.INSTAGRAPI_WORKER_URL}/user-info`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        username,
-      }),
-    })
-    const userInfoData = await userInfoResponse.json()
+    try {
+      // Tentar o login
+      await ig.simulate.preLoginFlow()
+      const loggedInUser = await ig.account.login(username, password)
+      
+      // Se chegar aqui, o login foi bem-sucedido (sem 2FA ou 2FA já fornecido)
+      // Mas se houver um verificationCode, precisamos completar o login de 2FA
+      // No entanto, a biblioteca instagram-private-api lida com 2FA lançando um erro específico
+      
+      process.nextTick(async () => await ig.simulate.postLoginFlow())
 
-    if (!userInfoResponse.ok) {
-      throw new Error(userInfoData.detail || "Erro ao obter informações do usuário via Worker Instagrapi")
+      // Salvar no banco de dados
+      await prisma.instagramAccount.upsert({
+        where: { instagramUsername: username },
+        update: {
+          instagramPassword: password,
+          isActive: true,
+          profilePicture: loggedInUser.profile_pic_url,
+        },
+        create: {
+          userId: session.user.id,
+          igUserId: loggedInUser.pk.toString(),
+          username: username,
+          instagramUsername: username,
+          instagramPassword: password,
+          profilePicture: loggedInUser.profile_pic_url,
+          isActive: true,
+        },
+      })
+
+      return NextResponse.json({ message: "Login bem-sucedido!", username })
+
+    } catch (error: any) {
+      // Tratar desafio de 2FA
+      if (error.name === 'IgCheckpointError' || error.message.includes('checkpoint')) {
+        return NextResponse.json({ error: "ChallengeRequired: 2FA ou verificação necessária." }, { status: 400 })
+      }
+      
+      if (error.name === 'IgLoginTwoFactorRequiredError') {
+        // Se já temos o código, tentamos finalizar
+        if (verificationCode) {
+          const twoFactorData = error.response.body.two_factor_info;
+          const method = '1'; // SMS ou App
+          await ig.account.twoFactorLogin({
+            username,
+            verificationCode,
+            twoFactorIdentifier: twoFactorData.two_factor_identifier,
+            verificationMethod: method,
+            trustThisDevice: '1',
+          });
+          
+          const currentUser = await ig.account.currentUser();
+          
+          await prisma.instagramAccount.upsert({
+            where: { instagramUsername: username },
+            update: { isActive: true },
+            create: {
+              userId: session.user.id,
+              igUserId: currentUser.pk.toString(),
+              username: username,
+              instagramUsername: username,
+              instagramPassword: password,
+              isActive: true,
+            },
+          })
+          
+          return NextResponse.json({ message: "Login 2FA bem-sucedido!", username })
+        }
+        return NextResponse.json({ error: "ChallengeRequired: Digite o código 2FA." }, { status: 400 })
+      }
+
+      throw error
     }
-
-    const { pk, profile_pic_url, follower_count } = userInfoData.user_info
-
-    await prisma.instagramAccount.upsert({
-      where: { instagramUsername: username }, // Usar o username do Instagram como identificador único
-      update: {
-        instagramUsername: username,
-        instagramPassword: password, // Em um sistema real, isso deveria ser criptografado
-        sessionFilePath: sessionFilePath,
-        isActive: true,
-        lastActiveAt: new Date(),
-        // Manter o accessToken da API oficial se ainda for necessário para outras operações
-      },
-      create: {
-        userId: user.id,
-        igUserId: pk,
-        username: username,
-        instagramUsername: username,
-        instagramPassword: password, // Criptografar!
-        sessionFilePath: sessionFilePath,
-        profilePicture: profile_pic_url,
-        followerCount: follower_count,
-        isActive: true,
-      },
-    })
-
-    return NextResponse.json({ message: "Conta Instagram conectada com sucesso via Instagrapi!", username: username })
 
   } catch (error: any) {
-    // Se o erro for de 2FA, podemos retornar uma mensagem específica para o frontend
-    if (error.message && error.message.includes("ChallengeRequired")) {
-      return NextResponse.json({ error: "ChallengeRequired: 2FA ou outro desafio de segurança necessário." }, { status: 400 })
-    }
-    console.error("Erro ao conectar conta Instagram via Instagrapi:", error)
-    return NextResponse.json({ error: error.message || "Erro interno do servidor" }, { status: 500 })
+    console.error("Erro no login Instagram:", error)
+    return NextResponse.json({ error: error.message || "Erro interno no servidor" }, { status: 500 })
   }
 }
